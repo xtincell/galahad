@@ -1,0 +1,20 @@
+# Traefik dynamic config for the Galahad cockpit (optional).
+# Drop into your Traefik dynamic directory and adjust the host rule + service.
+# Assumes a Traefik instance already terminating TLS via a certresolver.
+
+http:
+  routers:
+    galahad-cockpit:
+      rule: "Host(`galahad.example.com`)"
+      entryPoints: ["websecure"]
+      service: galahad-cockpit
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    galahad-cockpit:
+      loadBalancer:
+        servers:
+          # Point at a static file server (e.g. nginx) serving ./cockpit,
+          # or a small status sidecar.
+          - url: "http://galahad-cockpit:80"

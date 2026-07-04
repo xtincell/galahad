@@ -1,0 +1,13 @@
+# Secrets & local state — never commit.
+.env
+.env.*
+!.env.example
+workspace/
+*/node_modules/
+node_modules/
+memory/
+journal/
+*.log
+*.bak
+*.bak-*
+.DS_Store

@@ -1,0 +1,13 @@
+{
+  "name": "galahad-engine",
+  "version": "0.1.0",
+  "description": "Role-configurable autonomous LLM agent — Telegram gateway + provider-agnostic brain + tool loop + programmatic guardrails + file memory. Zero build, zero inbound port.",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "check": "for f in src/*.js; do node --check \"$f\" || exit 1; done"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,91 @@
+# Galahad — a self-hosted team of autonomous LLM agents on one machine.
+# One engine image, three roles. Everything is driven by ./.env (see .env.example).
+# The claude-bridge is optional: `docker compose --profile bridge up -d`.
+#
+# Nothing here is specific to any operator — copy .env.example to .env, fill it,
+# and this runs on any Linux VPS with Docker.
+
+name: galahad
+
+x-engine: &engine
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: galahad-engine:latest
+  restart: unless-stopped
+  env_file: .env
+  volumes:
+    # Shared, persistent memory the whole team reads/writes.
+    - galahad-memory:/memory
+    # The workspace agents survey and build in. Point WORKSPACE_HOST at yours.
+    - ${WORKSPACE_HOST:-./workspace}:/workspace
+    # Read-only host visibility for patrol (docker socket = survey containers).
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+  networks: [galahad]
+
+services:
+  chef:
+    <<: *engine
+    container_name: galahad-chef
+    environment:
+      GALAHAD_ROLE: chef
+      GALAHAD_HOME: /memory/chef
+      GALAHAD_WORKSPACE: /workspace
+      TELEGRAM_BOT_TOKEN: ${CHEF_TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${OPERATOR_CHAT_ID}
+      GALAHAD_MODEL: ${CHEF_MODEL:-gpt-oss:120b}
+      CLAUDE_BRIDGE_URL: ${CLAUDE_BRIDGE_URL:-http://claude-bridge:8799}
+      CLAUDE_BRIDGE_TOKEN: ${CLAUDE_BRIDGE_TOKEN:-}
+
+  guardian:
+    <<: *engine
+    container_name: galahad-guardian
+    environment:
+      GALAHAD_ROLE: guardian
+      GALAHAD_HOME: /memory/guardian
+      GALAHAD_WORKSPACE: /workspace
+      TELEGRAM_BOT_TOKEN: ${GUARDIAN_TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${OPERATOR_CHAT_ID}
+      GALAHAD_MODEL: ${GUARDIAN_MODEL:-deepseek-v4-flash}
+      GALAHAD_HEARTBEAT_MINUTES: ${GUARDIAN_HEARTBEAT_MINUTES:-5}
+
+  traveler:
+    <<: *engine
+    container_name: galahad-traveler
+    environment:
+      GALAHAD_ROLE: traveler
+      GALAHAD_HOME: /memory/traveler
+      GALAHAD_WORKSPACE: /workspace
+      TELEGRAM_BOT_TOKEN: ${TRAVELER_TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${OPERATOR_CHAT_ID}
+      GALAHAD_MODEL: ${TRAVELER_MODEL:-deepseek-v4-pro}
+      GALAHAD_HEARTBEAT_MINUTES: ${TRAVELER_HEARTBEAT_MINUTES:-30}
+      GALAHAD_NIGHT_START: ${NIGHT_START:-22}
+      GALAHAD_NIGHT_END: ${NIGHT_END:-6}
+      CLAUDE_BRIDGE_URL: ${CLAUDE_BRIDGE_URL:-http://claude-bridge:8799}
+      CLAUDE_BRIDGE_TOKEN: ${CLAUDE_BRIDGE_TOKEN:-}
+
+  # Optional heavy-dev muscle. Enable with: docker compose --profile bridge up -d
+  claude-bridge:
+    build:
+      context: .
+      dockerfile: bridge/Dockerfile
+    image: galahad-claude-bridge:latest
+    container_name: galahad-claude-bridge
+    restart: unless-stopped
+    profiles: [bridge]
+    environment:
+      BRIDGE_TOKEN: ${CLAUDE_BRIDGE_TOKEN}
+      BRIDGE_MODEL: ${BRIDGE_MODEL:-claude-sonnet-5}
+      BRIDGE_CWD: /workspace
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ${WORKSPACE_HOST:-./workspace}:/workspace
+    networks: [galahad]
+
+volumes:
+  galahad-memory:
+
+networks:
+  galahad:
+    driver: bridge

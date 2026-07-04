@@ -1,0 +1,16 @@
+# Caddy edge routing for the Galahad cockpit (optional).
+# Caddy fetches and renews TLS automatically. Copy the block into your Caddyfile
+# and swap the domain. The agents themselves need NO inbound port — this only
+# exposes the static cockpit dashboard.
+
+galahad.example.com {
+    encode zstd gzip
+    root * /srv/galahad/cockpit
+    file_server
+}
+
+# If you later expose a JSON status API (e.g. a tiny sidecar reading the
+# journals), reverse-proxy it here:
+# handle /api/* {
+#     reverse_proxy localhost:8080
+# }
