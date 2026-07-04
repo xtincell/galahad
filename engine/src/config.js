@@ -51,6 +51,11 @@ export const config = {
   timezone: process.env.GALAHAD_TZ || 'UTC',
   brainOnEvent: (process.env.GALAHAD_BRAIN_ON_EVENT ?? 'true') === 'true',
 
+  // Guardian patrol thresholds — shell-level, zero-token anomaly gates.
+  diskWarnPct: Number(process.env.GALAHAD_DISK_WARN || 80),
+  ramWarnPct: Number(process.env.GALAHAD_RAM_WARN || 90),
+  loadWarn: Number(process.env.GALAHAD_LOAD_WARN || 8),
+
   // Claude bridge — optional heavy-dev tool the agents can call.
   bridgeUrl: process.env.CLAUDE_BRIDGE_URL || null,
   bridgeToken: process.env.CLAUDE_BRIDGE_TOKEN || null,
