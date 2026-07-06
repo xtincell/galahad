@@ -8,6 +8,7 @@ import { config } from './config.js'
 import { guard } from './hooks.js'
 import { writeCard, readCard } from './memory.js'
 import { log } from './journal.js'
+import { radarSchemas, isRadarTool, radarRun, danmemSchemas, isDanmemTool, danmemRun } from './integrations.js'
 
 const sh = promisify(exec)
 
@@ -71,9 +72,13 @@ export const toolSchemas = [
       },
     },
   },
+  ...radarSchemas,
+  ...danmemSchemas,
 ]
 
 export async function runTool(name, args) {
+  if (isRadarTool(name)) return radarRun(name, args)
+  if (isDanmemTool(name)) return danmemRun(name, args)
   switch (name) {
     case 'shell': {
       const g = guard('shell', args.cmd)

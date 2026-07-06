@@ -68,5 +68,13 @@ export const config = {
   memoryDir: path.join(home, 'memory'),
   journalDir: path.join(home, 'journal'),
   dataDir: path.join(home, 'data'),
+
+  // Talos integrations: radars + shared memory (integrations.js).
+  radar: {
+    matanga: { url: process.env.RADAR_MATANGA_URL || '', key: process.env.RADAR_MATANGA_KEY || '' },
+    perso: { url: process.env.RADAR_PERSO_URL || '', key: process.env.RADAR_PERSO_KEY || '' },
+  },
+  danmemUrl: process.env.DANMEM_URL || null,
+  danmemToken: process.env.DANMEM_TOKEN || null,
   soulFile: process.env.GALAHAD_SOUL || path.join(pkgRoot, 'roles', `${roleKey}.md`),
 }
