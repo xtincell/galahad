@@ -9,7 +9,7 @@ import { think, resetSession } from './agent-loop.js'
 import { grantFromUser } from './hooks.js'
 import { getModel, setModel, tokensUsed } from './brain.js'
 import { ensureMemory, readIndex } from './memory.js'
-import { heartbeat, statusText } from './heartbeat.js'
+import { heartbeat, statusText, getPatrolMinutes, setPatrolMinutes } from './heartbeat.js'
 
 for (const dir of [config.home, config.memoryDir, config.journalDir, config.dataDir, config.workspace]) {
   fs.mkdirSync(dir, { recursive: true })
@@ -19,6 +19,7 @@ ensureMemory()
 const HELP = `🔷 ${config.agentName} — ${config.roleDef.title} (Galahad)
 /status — vitals + brain + tokens
 /brain — show brain · /brain <model> — swap it (hot)
+/patrol — show cadence · /patrol <min> — set it (hot)
 /memory — memory index
 /new — fresh conversation
 /help — this message
@@ -36,6 +37,14 @@ async function onMessage(text) {
     setModel(arg); log('brain_swap', { model: arg })
     return send(`🧠 Brain → *${arg}* (immediate).`)
   }
+  if (text === '/patrol' || text.startsWith('/patrol ')) {
+    const arg = text.slice(7).trim()
+    if (!arg) return send(`🛡️ Patrol: *every ${getPatrolMinutes()} min* (default ${config.heartbeatMinutes}).\nSet hot: /patrol <minutes> — e.g. /patrol 3 (1-1440).`)
+    const n = Number(arg)
+    if (!Number.isFinite(n) || n < 1 || n > 1440) return send('⚠️ Give a number of minutes between 1 and 1440.')
+    const set = setPatrolMinutes(n); log('patrol_set', { minutes: set })
+    return send(`🛡️ Patrol cadence → *every ${set} min* (takes effect next cycle, persistent).`)
+  }
 
   // Any operator message can authorise an engaging action for the next 5 min.
   grantFromUser(text)
@@ -48,11 +57,16 @@ async function onMessage(text) {
   } finally { clearInterval(keep) }
 }
 
-log('boot', { role: config.role, model: getModel(), heartbeat: config.heartbeatMinutes })
+log('boot', { role: config.role, model: getModel(), heartbeat: getPatrolMinutes() })
 send(`${config.agentName} online — role ${config.role}, brain ${getModel()}. /help`)
 
 if (config.heartbeatMinutes > 0) {
-  setInterval(() => heartbeat().catch((e) => log('heartbeat_error', { error: String(e) })), config.heartbeatMinutes * 60_000)
+  // Self-rescheduling patrol: re-reads the cadence EACH cycle → hot-adjustable, no restart.
+  const schedulePatrol = () => setTimeout(
+    () => heartbeat().catch((e) => log('heartbeat_error', { error: String(e) })).finally(schedulePatrol),
+    getPatrolMinutes() * 60_000,
+  )
+  schedulePatrol()
   heartbeat().catch((e) => log('heartbeat_error', { error: String(e) }))
 }
 

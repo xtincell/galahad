@@ -17,6 +17,22 @@ import { log } from './journal.js'
 
 const sh = promisify(exec)
 
+// Patrol cadence (minutes) — hot-adjustable like the brain: a runtime override in
+// data/patrol.txt, read live each cycle; otherwise config.heartbeatMinutes.
+const patrolFile = path.join(config.dataDir, 'patrol.txt')
+export function getPatrolMinutes() {
+  try {
+    const n = Number(fs.readFileSync(patrolFile, 'utf8').trim())
+    return Number.isFinite(n) && n >= 1 && n <= 1440 ? n : config.heartbeatMinutes
+  } catch { return config.heartbeatMinutes }
+}
+export function setPatrolMinutes(mins) {
+  const n = Math.max(1, Math.min(1440, Math.round(Number(mins))))
+  fs.mkdirSync(config.dataDir, { recursive: true })
+  fs.writeFileSync(patrolFile, String(n))
+  return n
+}
+
 // Run one shell command, classifying the outcome. `absent` distinguishes a tool
 // that simply isn't installed (fine) from one that is present but errored (alert).
 async function run(cmd, { timeout = 8000 } = {}) {
