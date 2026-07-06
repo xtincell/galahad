@@ -10,6 +10,7 @@ import { grantFromUser } from './hooks.js'
 import { getModel, setModel, tokensUsed } from './brain.js'
 import { ensureMemory, readIndex } from './memory.js'
 import { heartbeat, statusText, getPatrolMinutes, setPatrolMinutes } from './heartbeat.js'
+import { pendingGoals, addGoal, formatGoals } from './goals.js'
 
 for (const dir of [config.home, config.memoryDir, config.journalDir, config.dataDir, config.workspace]) {
   fs.mkdirSync(dir, { recursive: true })
@@ -20,6 +21,7 @@ const HELP = `🔷 ${config.agentName} — ${config.roleDef.title} (Galahad)
 /status — vitals + brain + tokens
 /brain — show brain · /brain <model> — swap it (hot)
 /patrol — show cadence · /patrol <min> — set it (hot)
+/goal — show goals · /goal <objective> — add one (guides night work)
 /memory — memory index
 /new — fresh conversation
 /help — this message
@@ -44,6 +46,13 @@ async function onMessage(text) {
     if (!Number.isFinite(n) || n < 1 || n > 1440) return send('⚠️ Give a number of minutes between 1 and 1440.')
     const set = setPatrolMinutes(n); log('patrol_set', { minutes: set })
     return send(`🛡️ Patrol cadence → *every ${set} min* (takes effect next cycle, persistent).`)
+  }
+
+  if (text === '/goal' || text.startsWith('/goal ')) {
+    const arg = text.slice(5).trim()
+    if (!arg) return send(`🎯 Goals:\n${formatGoals(pendingGoals())}\nAdd: /goal <objective>`)
+    const n = addGoal(arg); log('goal_add', {})
+    return send(`🎯 Goal added (${n} total). It guides the night-exploration window.`)
   }
 
   // Any operator message can authorise an engaging action for the next 5 min.

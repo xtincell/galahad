@@ -14,6 +14,7 @@ import { config } from './config.js'
 import { think } from './agent-loop.js'
 import { send } from './telegram.js'
 import { log } from './journal.js'
+import { pendingGoals, formatGoals } from './goals.js'
 
 const sh = promisify(exec)
 
@@ -217,9 +218,10 @@ export async function heartbeat() {
   const reason = anomaly
     ? `patrol found: ${[...report.fails, ...report.warns].map((s) => `${s.label}=${s.detail}`).join(' | ')}`
     : 'night exploration window'
+  const goalsHint = (!anomaly && config.role === 'traveler') ? `\nYour current goals:\n${formatGoals(pendingGoals())}` : ''
   try {
     const { text } = await think({
-      prompt: `Autonomous tick — ${reason}. Investigate briefly with your tools if useful, then report one concise finding or "nothing to report". Do not take any engaging action without asking.`,
+      prompt: `Autonomous tick — ${reason}.${goalsHint} Investigate briefly with your tools if useful, then report one concise finding or "nothing to report". Do not take any engaging action without asking.`,
     })
     if (text && !/nothing to report/i.test(text)) await send(`🛰️ ${config.agentName}: ${text}`)
   } catch (e) {
