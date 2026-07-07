@@ -11,6 +11,7 @@ import { getModel, setModel, tokensUsed } from './brain.js'
 import { ensureMemory, readIndex } from './memory.js'
 import { heartbeat, statusText, getPatrolMinutes, setPatrolMinutes } from './heartbeat.js'
 import { pendingGoals, addGoal, formatGoals } from './goals.js'
+import { execFile } from 'node:child_process'
 
 for (const dir of [config.home, config.memoryDir, config.journalDir, config.dataDir, config.workspace]) {
   fs.mkdirSync(dir, { recursive: true })
@@ -22,6 +23,7 @@ const HELP = `🔷 ${config.agentName} — ${config.roleDef.title} (Galahad)
 /brain — show brain · /brain <model> — swap it (hot)
 /patrol — show cadence · /patrol <min> — set it (hot)
 /goal — show goals · /goal <objective> — add one (guides night work)
+/purge — run patrol purge now (findings → Claude → deliver)
 /memory — memory index
 /new — fresh conversation
 /help — this message
@@ -53,6 +55,17 @@ async function onMessage(text) {
     if (!arg) return send(`🎯 Goals:\n${formatGoals(pendingGoals())}\nAdd: /goal <objective>`)
     const n = addGoal(arg); log('goal_add', {})
     return send(`🎯 Goal added (${n} total). It guides the night-exploration window.`)
+  }
+
+  if (text === '/purge') {
+    send('🧹 Purge lancée — constats → Claude, puis livraison. Quelques minutes…')
+    execFile('sudo', ['-n', '/opt/galahad/patrol/purge.sh'], { timeout: 600000 }, (e) => {
+      if (e) { log('purge_error', { error: String(e) }); return send('⚠️ Purge KO: ' + String(e.message || e).slice(0, 180)) }
+      execFile('sudo', ['-n', '/opt/galahad/patrol/deliver.sh'], { timeout: 60000 }, (e2) => {
+        log('purge_done', {}); send(e2 ? '✅ Purge faite (livraison au prochain créneau).' : '✅ Purge + livraison faites.')
+      })
+    })
+    return
   }
 
   // Any operator message can authorise an engaging action for the next 5 min.
