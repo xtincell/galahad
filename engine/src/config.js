@@ -27,6 +27,16 @@ if (!role) {
 
 const home = process.env.GALAHAD_HOME || path.join(os.homedir(), '.galahad', roleKey)
 
+// Optional external task-tracker(s) ("radar"), declared via env — no names baked in source.
+// RADAR_INSTANCES=name1,name2 ; then RADAR_<NAME>_URL / RADAR_<NAME>_KEY per instance.
+function parseRadar() {
+  const names = (process.env.RADAR_INSTANCES || '').split(',').map((x) => x.trim()).filter(Boolean)
+  const byName = {}
+  for (const n of names) { const K = n.toUpperCase().replace(/[^A-Z0-9]+/g, '_'); byName[n] = { url: process.env['RADAR_' + K + '_URL'] || '', key: process.env['RADAR_' + K + '_KEY'] || '' } }
+  return { names, byName }
+}
+const _radar = parseRadar()
+
 export const config = {
   role: roleKey,
   roleDef: role,
@@ -69,11 +79,10 @@ export const config = {
   journalDir: path.join(home, 'journal'),
   dataDir: path.join(home, 'data'),
 
-  // Talos integrations: radars + shared memory (integrations.js).
-  radar: {
-    matanga: { url: process.env.RADAR_MATANGA_URL || '', key: process.env.RADAR_MATANGA_KEY || '' },
-    perso: { url: process.env.RADAR_PERSO_URL || '', key: process.env.RADAR_PERSO_KEY || '' },
-  },
+  // Optional integrations (integrations.js): external task-tracker(s) + shared memory.
+  radar: _radar.byName,
+  radarNames: _radar.names,
+  operatorName: process.env.OPERATOR_NAME || 'operator',
   danmemUrl: process.env.DANMEM_URL || null,
   danmemToken: process.env.DANMEM_TOKEN || null,
   // Cumulative patrol report — if set, findings append here (silent) instead of Telegram.

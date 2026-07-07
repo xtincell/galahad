@@ -1,5 +1,5 @@
-// Talos integrations wired as native tools — no MCP subprocess, pure HTTP:
-//  • the two radars (Matanga agency + Alexandre's perso), PostgREST full-access API
+// Optional integrations wired as native tools — no MCP subprocess, pure HTTP:
+//  • external task-tracker(s) ("radar"), PostgREST-style full-access API, declared via env
 //  • danmem (shared team memory)
 // Schemas are empty [] when the matching env is absent, so other roles stay clean.
 import { config } from './config.js'
@@ -19,8 +19,8 @@ async function radarApi(radar, method, pathq, body) {
   if (!res.ok) throw new Error(`${radar} ${method} ${pathq} -> HTTP ${res.status}: ${text.slice(0, 300)}`)
   try { return JSON.parse(text) } catch { return text }
 }
-const RADAR_ARG = { radar: { type: 'string', enum: ['matanga', 'perso'], description: "which radar: 'matanga' (agency) or 'perso' (Alexandre's projects)" } }
-export const radarSchemas = (config.radar.matanga.url || config.radar.perso.url) ? [
+const RADAR_ARG = { radar: { type: 'string', enum: config.radarNames, description: 'which task-tracker instance (one of the configured RADAR_INSTANCES)' } }
+export const radarSchemas = config.radarNames.length ? [
   fn('radar_list', 'List/search tasks (briefs) of a radar. No query = all (cap 200). Full-access.', { ...RADAR_ARG, query: { type: 'string' } }, ['radar']),
   fn('radar_get', 'Get a full task by its ndeg.', { ...RADAR_ARG, ndeg: { type: 'string' } }, ['radar', 'ndeg']),
   fn('radar_create', 'Create a task. fields = snake_case columns (ndeg, client, marque, projet, statut, prio, responsable, deadline...).', { ...RADAR_ARG, fields: { type: 'object' } }, ['radar', 'fields']),
@@ -43,7 +43,7 @@ export async function radarRun(name, a) {
     case 'radar_create': { const r = await radarApi(a.radar, 'POST', 'briefs', [a.fields]); return JSON.stringify({ created: r[0] || a.fields }) }
     case 'radar_update': { const r = await radarApi(a.radar, 'PATCH', `briefs?ndeg=eq.${enc(a.ndeg)}`, a.patch); return JSON.stringify(r.length ? { updated: r } : `no task "${a.ndeg}"`) }
     case 'radar_delete': { const r = await radarApi(a.radar, 'DELETE', `briefs?ndeg=eq.${enc(a.ndeg)}`); return r.length ? `deleted ${a.ndeg} (${r.length})` : `no task "${a.ndeg}"` }
-    case 'radar_comment': { const r = await radarApi(a.radar, 'POST', 'comments', [{ ndeg: a.ndeg, author: a.author || 'Talos', body: a.text }]); return JSON.stringify({ comment: r[0] || { ndeg: a.ndeg } }) }
+    case 'radar_comment': { const r = await radarApi(a.radar, 'POST', 'comments', [{ ndeg: a.ndeg, author: a.author || config.agentName, body: a.text }]); return JSON.stringify({ comment: r[0] || { ndeg: a.ndeg } }) }
     case 'radar_activity': { const n = Math.min(Math.max(Number(a.limit) || 30, 1), 200); const r = await radarApi(a.radar, 'GET', `task_events?select=at,kind,ndeg,client,projet,statut_old,statut_new,resp_old,resp_new,summary&order=at.desc&limit=${n}`); return JSON.stringify({ count: r.length, events: r }) }
   }
 }
@@ -58,7 +58,7 @@ async function danmemCall(method, p, payload) {
   return res.json()
 }
 export const danmemSchemas = config.danmemUrl ? [
-  fn('memoire_observer', 'Store a durable fact in shared danmem. peer = subject (alexandre, danhermes, talos, hulysse, matanga...).', { contenu: { type: 'string' }, peer: { type: 'string' }, strate: { type: 'string' } }, ['contenu']),
+  fn('memoire_observer', 'Store a durable fact in shared danmem. peer = subject (operator, an agent, a project...).', { contenu: { type: 'string' }, peer: { type: 'string' }, strate: { type: 'string' } }, ['contenu']),
   fn('memoire_demander', 'Query a peer danmem (recall + LLM synthesis).', { question: { type: 'string' }, peer: { type: 'string' } }, ['question']),
   fn('memoire_carte', 'Read a peer synthetic card (no LLM).', { peer: { type: 'string' } }, []),
   fn('memoire_peers', 'List danmem peers with observation counts.', {}, []),
@@ -66,9 +66,9 @@ export const danmemSchemas = config.danmemUrl ? [
 export const isDanmemTool = (n) => n.startsWith('memoire_')
 export async function danmemRun(name, a) {
   switch (name) {
-    case 'memoire_observer': { const d = await danmemCall('POST', '/observe', { peer: a.peer || 'talos', content: a.contenu || '', strate: a.strate || 'S1', kind: 'note', source: 'talos' }); return `observation stored (id ${d.id || '?'})` }
-    case 'memoire_demander': { const d = await danmemCall('POST', '/dialectic', { peer: a.peer || 'alexandre', question: a.question || '' }); return d.answer || d.error || JSON.stringify(d) }
-    case 'memoire_carte': { const d = await danmemCall('GET', '/card/' + (a.peer || 'alexandre')); return d.card || '(no card)' }
+    case 'memoire_observer': { const d = await danmemCall('POST', '/observe', { peer: a.peer || config.agentName, content: a.contenu || '', strate: a.strate || 'S1', kind: 'note', source: config.agentName }); return `observation stored (id ${d.id || '?'})` }
+    case 'memoire_demander': { const d = await danmemCall('POST', '/dialectic', { peer: a.peer || config.operatorName, question: a.question || '' }); return d.answer || d.error || JSON.stringify(d) }
+    case 'memoire_carte': { const d = await danmemCall('GET', '/card/' + (a.peer || config.operatorName)); return d.card || '(no card)' }
     case 'memoire_peers': { const d = await danmemCall('GET', '/peers'); return (d.peers || []).map((p) => `${p.id} [${p.kind || '?'}] ${p.obs} obs`).join('\n') || '(no peers)' }
   }
 }
