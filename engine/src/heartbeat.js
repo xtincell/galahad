@@ -189,6 +189,17 @@ export async function statusText() {
 
 // The autonomous pulse. Guardian: ordered patrol + ETAT_DU_MONDE + alert-on-anomaly.
 // Traveler: same cheap sweep, plus the night-exploration brain window it always had.
+// Finding sink: append to the cumulative patrol report if configured (GALAHAD_PATROL_REPORT),
+// otherwise fall back to a direct Telegram message. Clean patrols stay silent either way.
+function reportFinding(text) {
+  if (config.patrolReportFile) {
+    try { fs.appendFileSync(config.patrolReportFile, `## ${new Date().toISOString()} \u00b7 ${config.agentName}\n${text}\n\n`) }
+    catch (e) { log('report_append_error', { error: String(e) }) }
+    return Promise.resolve()
+  }
+  return send(text)
+}
+
 export async function heartbeat() {
   const report = await patrol()
   log('patrol', { warns: report.warns.length, fails: report.fails.length })
@@ -198,13 +209,13 @@ export async function heartbeat() {
   // silently swallowed. This is the radar rule — if an instrument is blind, say so.
   if (report.fails.length) {
     const body = report.fails.map((f) => `🔴 ${f.label}: ${f.detail}`).join('\n')
-    await send(`🛡️ ${config.agentName} — patrol check(s) could not run:\n${body}`).catch((e) => log('alert_send_error', { error: String(e) }))
+    await reportFinding(`🛡️ ${config.agentName} — patrol check(s) could not run:\n${body}`).catch((e) => log('alert_send_error', { error: String(e) }))
   }
 
   // Anomaly handling: zero-token Telegram alert with the offending details.
   if (report.warns.length) {
     const body = report.warns.map((w) => `🟠 ${w.label}: ${w.detail}`).join('\n')
-    await send(`🛡️ ${config.agentName} — anomaly on patrol:\n${body}`).catch((e) => log('alert_send_error', { error: String(e) }))
+    await reportFinding(`🛡️ ${config.agentName} — anomaly on patrol:\n${body}`).catch((e) => log('alert_send_error', { error: String(e) }))
   }
 
   // All clear → silent. The journal + ETAT_DU_MONDE.md hold the record; no Telegram spam.
@@ -223,7 +234,7 @@ export async function heartbeat() {
     const { text } = await think({
       prompt: `Autonomous tick — ${reason}.${goalsHint} Investigate briefly with your tools if useful, then report one concise finding or "nothing to report". Do not take any engaging action without asking.`,
     })
-    if (text && !/nothing to report/i.test(text)) await send(`🛰️ ${config.agentName}: ${text}`)
+    if (text && !/nothing to report/i.test(text)) await reportFinding(`🛰️ ${config.agentName}: ${text}`)
   } catch (e) {
     log('heartbeat_brain_error', { error: String(e) })
   }

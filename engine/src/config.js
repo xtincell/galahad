@@ -76,5 +76,7 @@ export const config = {
   },
   danmemUrl: process.env.DANMEM_URL || null,
   danmemToken: process.env.DANMEM_TOKEN || null,
+  // Cumulative patrol report — if set, findings append here (silent) instead of Telegram.
+  patrolReportFile: process.env.GALAHAD_PATROL_REPORT || null,
   soulFile: process.env.GALAHAD_SOUL || path.join(pkgRoot, 'roles', `${roleKey}.md`),
 }
