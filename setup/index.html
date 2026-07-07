@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galahad · Configuration</title>
+<meta name="description" content="Assistant de configuration Galahad — installe ton équipe d'agents autonomes en quelques clics.">
+<style>
+  :root{
+    --bg:#08080d;--card:#14141f;--card2:#191926;--line:#262638;
+    --ink:#ECECF5;--ink2:#A8A8BE;--faint:#6E6E86;
+    --i1:#6366F1;--i2:#A855F7;--i3:#22D3EE;--ok:#34D399;--warn:#FBBF24;--bad:#F87171;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:'SF Mono',ui-monospace,Menlo,monospace;
+    --grad:linear-gradient(120deg,var(--i1),var(--i2));
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:820px;margin:0 auto;padding:0 22px 80px}
+  .glow{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(700px 460px at 12% -8%,rgba(99,102,241,.18),transparent 60%),radial-gradient(620px 480px at 92% 0%,rgba(168,85,247,.14),transparent 60%)}
+  main{position:relative;z-index:1}
+  header{padding:44px 0 8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:750;font-size:20px;letter-spacing:-.01em}
+  .brand .mk{width:32px;height:32px;border-radius:9px;background:var(--grad);display:grid;place-items:center;font-size:17px;box-shadow:0 4px 16px rgba(99,102,241,.5)}
+  .pill{font-family:var(--mono);font-size:12px;color:var(--i3);border:1px solid var(--line);background:rgba(34,211,238,.05);border-radius:999px;padding:6px 13px;display:inline-flex;gap:8px;align-items:center}
+  .pill .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  h1{font-size:clamp(24px,4vw,34px);font-weight:800;letter-spacing:-.03em;margin:30px 0 6px}
+  .sub{color:var(--ink2);max-width:64ch;font-size:15.5px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--i2);margin:40px 0 4px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:22px;margin-top:16px}
+  .panel h3{font-size:15px;margin-bottom:4px}
+  .panel p{color:var(--ink2);font-size:14px;margin:6px 0}
+  .panel code{font-family:var(--mono);font-size:12.5px;color:var(--i3);background:var(--card2);padding:2px 7px;border-radius:6px}
+  a{color:var(--i3);text-decoration:none}a:hover{color:var(--ink)}
+
+  .field{margin-bottom:16px}
+  .field label{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:650;margin-bottom:6px}
+  .badge{font-family:var(--mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:999px;border:1px solid var(--line)}
+  .badge.req{color:var(--warn);border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.06)}
+  .badge.opt{color:var(--faint)}
+  .field input{
+    width:100%;background:var(--card2);border:1px solid var(--line);color:var(--ink);
+    border-radius:10px;padding:11px 13px;font-family:var(--mono);font-size:13.5px;outline:none;
+  }
+  .field input:focus{border-color:var(--i1);box-shadow:0 0 0 3px rgba(99,102,241,.18)}
+  .field .help{color:var(--faint);font-size:12.5px;margin-top:6px;line-height:1.5}
+  .field .help a{color:var(--i3)}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:560px){.two-col{grid-template-columns:1fr}}
+
+  details.adv{background:var(--card);border:1px solid var(--line);border-radius:15px;margin-top:16px;overflow:hidden}
+  details.adv summary{cursor:pointer;list-style:none;padding:18px 22px;font-weight:700;font-size:14.5px;display:flex;align-items:center;justify-content:space-between}
+  details.adv summary::-webkit-details-marker{display:none}
+  details.adv summary::after{content:"▾";color:var(--faint);transition:transform .15s}
+  details.adv[open] summary::after{transform:rotate(180deg)}
+  details.adv .adv-body{padding:4px 22px 20px}
+
+  .radar-instance{border-top:1px solid var(--line);margin-top:12px;padding-top:12px}
+  .radar-instance .tag{font-family:var(--mono);font-size:11px;color:var(--i2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+
+  .btn{
+    display:inline-flex;align-items:center;gap:9px;justify-content:center;width:100%;
+    background:var(--grad);color:#fff;border:none;border-radius:12px;padding:15px 20px;
+    font-size:15px;font-weight:700;cursor:pointer;margin-top:22px;letter-spacing:-.01em;
+  }
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .btn.ghost{background:none;border:1px solid var(--line);color:var(--ink2);margin-top:10px}
+
+  .progress{display:none;margin-top:18px}
+  .progress .track{height:8px;border-radius:999px;background:var(--card2);border:1px solid var(--line);overflow:hidden}
+  .progress .bar{height:100%;width:4%;background:var(--grad);transition:width .4s ease}
+  .progress .label{font-family:var(--mono);font-size:12px;color:var(--ink2);margin-top:8px}
+
+  .result{display:none;margin-top:18px;border-radius:15px;padding:20px;border:1px solid var(--line)}
+  .result.ok{background:rgba(52,211,153,.06);border-color:rgba(52,211,153,.3)}
+  .result.err{background:rgba(248,113,113,.06);border-color:rgba(248,113,113,.3)}
+  .result h3{margin-bottom:8px}
+  .result pre{white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:11.5px;color:var(--ink2);max-height:280px;overflow:auto;background:var(--card2);border-radius:10px;padding:12px;margin-top:10px}
+
+  #already h1{margin-top:10px}
+  footer{border-top:1px solid var(--line);margin-top:48px;padding:26px 0;color:var(--faint);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<main class="wrap">
+  <header>
+    <div class="brand"><span class="mk">✦</span> Galahad · Configuration</div>
+    <span class="pill"><span class="dot"></span>première visite</span>
+  </header>
+
+  <div id="already" style="display:none">
+    <h1>Galahad est déjà configuré.</h1>
+    <p class="sub">Un fichier <code style="font-family:var(--mono)">.env</code> valide existe déjà sur ce serveur. Pour éviter d'écraser une configuration en production par erreur, l'assistant refuse de continuer.</p>
+    <div class="panel">
+      <h3>Que faire ?</h3>
+      <p>Si tu gères déjà cette instance, va sur le cockpit.</p>
+      <a class="btn" href="/cockpit">Ouvrir le cockpit</a>
+      <button class="btn ghost" id="reconfigure-anyway">Reconfigurer quand même</button>
+    </div>
+  </div>
+
+  <div id="wizard" style="display:none">
+    <h1>Configure ton équipe d'agents.</h1>
+    <p class="sub">Remplis les champs ci-dessous — tout est écrit dans <code style="font-family:var(--mono)">.env</code> sur ce serveur, rien ne quitte cette machine sauf vers les services que tu indiques toi-même (Telegram, ton LLM…).</p>
+
+    <div id="sections"></div>
+
+    <button class="btn" id="deploy-btn">Configurer &amp; Déployer</button>
+
+    <div class="progress" id="progress">
+      <div class="track"><div class="bar" id="progress-bar"></div></div>
+      <div class="label" id="progress-label">…</div>
+    </div>
+
+    <div class="result ok" id="result-ok">
+      <h3>✓ Galahad est en ligne.</h3>
+      <p id="result-ok-msg"></p>
+      <a class="btn" href="/cockpit">Ouvrir le cockpit</a>
+    </div>
+
+    <div class="result err" id="result-err">
+      <h3>La configuration a échoué</h3>
+      <p id="result-err-msg"></p>
+      <pre id="result-err-logs"></pre>
+      <button class="btn ghost" id="retry-btn">Réessayer</button>
+    </div>
+  </div>
+
+  <footer>Galahad — assistant de configuration web · <a href="https://github.com/xtincell/galahad">github.com/xtincell/galahad</a></footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var forceMode = new URLSearchParams(location.search).get('force') === '1';
+
+  // Groups the spec asks for. Any schema field not listed here falls back
+  // into "advanced" automatically, so new .env.example keys never break the form.
+  var GROUPS = [
+    { id: 'identity', title: 'Identité & Telegram', keys: ['OPERATOR_CHAT_ID', 'CHEF_TELEGRAM_BOT_TOKEN', 'GUARDIAN_TELEGRAM_BOT_TOKEN', 'TRAVELER_TELEGRAM_BOT_TOKEN'] },
+    { id: 'llm', title: 'Modèle de langage (LLM)', keys: ['LLM_BASE_URL', 'LLM_API_KEY', 'CHEF_MODEL', 'GUARDIAN_MODEL', 'TRAVELER_MODEL'] },
+    { id: 'behavior', title: 'Comportement', keys: ['GUARDIAN_HEARTBEAT_MINUTES', 'TRAVELER_HEARTBEAT_MINUTES', 'NIGHT_START', 'NIGHT_END', 'DISK_WARN', 'RAM_WARN', 'LOAD_WARN'] },
+  ];
+  var ADVANCED_ORDER = ['CLAUDE_BRIDGE_TOKEN', 'ANTHROPIC_API_KEY', 'BRIDGE_MODEL', 'CLAUDE_BRIDGE_URL', 'OPERATOR_NAME', 'RADAR_INSTANCES', 'DANMEM_URL', 'DANMEM_TOKEN', 'WORKSPACE_HOST'];
+
+  var LABELS = {
+    OPERATOR_CHAT_ID: 'Ton chat id Telegram',
+    CHEF_TELEGRAM_BOT_TOKEN: 'Token du bot Chef',
+    GUARDIAN_TELEGRAM_BOT_TOKEN: 'Token du bot Guardian',
+    TRAVELER_TELEGRAM_BOT_TOKEN: 'Token du bot Traveler',
+    LLM_BASE_URL: 'URL du endpoint LLM',
+    LLM_API_KEY: 'Clé API LLM',
+    CHEF_MODEL: 'Modèle — Chef',
+    GUARDIAN_MODEL: 'Modèle — Guardian',
+    TRAVELER_MODEL: 'Modèle — Traveler',
+    GUARDIAN_HEARTBEAT_MINUTES: 'Patrouille Guardian (minutes)',
+    TRAVELER_HEARTBEAT_MINUTES: 'Cycle Traveler (minutes)',
+    NIGHT_START: 'Début de nuit (heure)',
+    NIGHT_END: 'Fin de nuit (heure)',
+    DISK_WARN: 'Alerte disque (%)',
+    RAM_WARN: 'Alerte RAM (%)',
+    LOAD_WARN: 'Alerte charge (load average)',
+    CLAUDE_BRIDGE_TOKEN: 'Token du bridge Claude',
+    ANTHROPIC_API_KEY: 'Clé API Anthropic',
+    BRIDGE_MODEL: 'Modèle du bridge',
+    CLAUDE_BRIDGE_URL: 'URL interne du bridge',
+    OPERATOR_NAME: 'Ton nom (identité opérateur)',
+    RADAR_INSTANCES: 'Instances radar (séparées par des virgules)',
+    DANMEM_URL: 'URL danmem',
+    DANMEM_TOKEN: 'Token danmem',
+    WORKSPACE_HOST: 'Dossier workspace (hôte)',
+  };
+
+  var EXTRA_HELP = {
+    CHEF_TELEGRAM_BOT_TOKEN: 'Crée un bot via <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> sur Telegram, copie le token qu\'il te donne.',
+    GUARDIAN_TELEGRAM_BOT_TOKEN: 'Un bot dédié, distinct de celui du Chef — via <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>.',
+    TRAVELER_TELEGRAM_BOT_TOKEN: 'Encore un bot dédié — via <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>.',
+    RADAR_INSTANCES: 'Laisse vide si tu n\'utilises pas radar.',
+  };
+
+  function el(tag, cls, html) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html !== undefined) e.innerHTML = html;
+    return e;
+  }
+
+  function labelFor(key) { return LABELS[key] || key; }
+
+  function fieldNode(f, opts) {
+    opts = opts || {};
+    var wrap = el('div', 'field');
+    var label = el('label');
+    label.appendChild(document.createTextNode(labelFor(f.key)));
+    label.appendChild(el('span', 'badge ' + (f.required ? 'req' : 'opt'), f.required ? 'obligatoire' : 'optionnel'));
+    wrap.appendChild(label);
+
+    var input = document.createElement('input');
+    input.name = f.key;
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.type = f.type === 'password' ? 'password' : (f.type === 'number' ? 'number' : (f.type === 'url' ? 'url' : 'text'));
+    input.value = f.default || '';
+    if (f.required) input.placeholder = 'requis';
+    wrap.appendChild(input);
+
+    var helpText = [f.help, EXTRA_HELP[f.key]].filter(Boolean).join(' ');
+    if (helpText) wrap.appendChild(el('div', 'help', helpText));
+
+    if (opts.onInput) input.addEventListener('input', opts.onInput);
+    wrap._input = input;
+    return wrap;
+  }
+
+  function buildRadarDynamic(container, state) {
+    container.innerHTML = '';
+    var raw = state.radarInput.value.trim();
+    var names = raw ? raw.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+    state.radarInputs = {};
+    names.forEach(function (name) {
+      var norm = name.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      if (!norm) return;
+      var block = el('div', 'radar-instance');
+      block.appendChild(el('div', 'tag', 'radar · ' + name));
+      var row = el('div', 'two-col');
+
+      var urlField = fieldNode({ key: 'RADAR_' + norm + '_URL', help: 'URL de l\'instance "' + name + '"', default: state.radarValues[norm + '_URL'] || '', required: false, type: 'url' });
+      var keyField = fieldNode({ key: 'RADAR_' + norm + '_KEY', help: 'Clé API de l\'instance "' + name + '"', default: state.radarValues[norm + '_KEY'] || '', required: false, type: 'password' });
+      row.appendChild(urlField);
+      row.appendChild(keyField);
+      block.appendChild(row);
+      container.appendChild(block);
+
+      state.radarInputs[norm + '_URL'] = urlField._input;
+      state.radarInputs[norm + '_KEY'] = keyField._input;
+      urlField._input.addEventListener('input', function () { state.radarValues[norm + '_URL'] = urlField._input.value; });
+      keyField._input.addEventListener('input', function () { state.radarValues[norm + '_KEY'] = keyField._input.value; });
+    });
+  }
+
+  function renderWizard(schema) {
+    var allFields = {};
+    schema.sections.forEach(function (s) { s.fields.forEach(function (f) { allFields[f.key] = f; }); });
+
+    var sectionsEl = document.getElementById('sections');
+    var inputs = {};
+    var usedKeys = {};
+
+    GROUPS.forEach(function (g) {
+      var box = el('div');
+      box.appendChild(el('div', 'eyebrow', g.title));
+      var panel = el('div', 'panel');
+      g.keys.forEach(function (k) {
+        var f = allFields[k];
+        if (!f) return;
+        usedKeys[k] = true;
+        var node = fieldNode(f);
+        panel.appendChild(node);
+        inputs[k] = node._input;
+      });
+      box.appendChild(panel);
+      sectionsEl.appendChild(box);
+    });
+
+    // Advanced / optional, collapsible — plus any field the groups above didn't claim
+    // (keeps the form correct even if .env.example grows new keys later).
+    var advKeys = ADVANCED_ORDER.slice();
+    Object.keys(allFields).forEach(function (k) { if (!usedKeys[k] && advKeys.indexOf(k) === -1) advKeys.push(k); });
+
+    var details = el('details', 'adv');
+    var summary = el('summary', null, 'Options avancées (Claude bridge, identité, radar, mémoire partagée)');
+    details.appendChild(summary);
+    var advBody = el('div', 'adv-body');
+
+    var radarState = { radarValues: {}, radarInputs: {} };
+    advKeys.forEach(function (k) {
+      var f = allFields[k];
+      if (!f || usedKeys[k]) return;
+      usedKeys[k] = true;
+      if (k === 'RADAR_INSTANCES') {
+        var node = fieldNode(f, { onInput: function () { buildRadarDynamic(radarContainer, radarState); } });
+        radarState.radarInput = node._input;
+        advBody.appendChild(node);
+        inputs[k] = node._input;
+        var radarContainer = el('div');
+        advBody.appendChild(radarContainer);
+        buildRadarDynamic(radarContainer, radarState);
+        return;
+      }
+      var n = fieldNode(f);
+      advBody.appendChild(n);
+      inputs[k] = n._input;
+    });
+
+    details.appendChild(advBody);
+    sectionsEl.appendChild(details);
+
+    function collectValues() {
+      var values = {};
+      Object.keys(inputs).forEach(function (k) { values[k] = inputs[k].value; });
+      Object.keys(radarState.radarInputs).forEach(function (suffix) { values['RADAR_' + suffix] = radarState.radarInputs[suffix].value; });
+      return values;
+    }
+
+    var deployBtn = document.getElementById('deploy-btn');
+    var progress = document.getElementById('progress');
+    var progressBar = document.getElementById('progress-bar');
+    var progressLabel = document.getElementById('progress-label');
+    var resultOk = document.getElementById('result-ok');
+    var resultErr = document.getElementById('result-err');
+
+    function setProgress(pct, label) {
+      progress.style.display = 'block';
+      progressBar.style.width = pct + '%';
+      progressLabel.textContent = label;
+    }
+
+    function runSetup() {
+      deployBtn.disabled = true;
+      resultOk.style.display = 'none';
+      resultErr.style.display = 'none';
+      setProgress(8, 'Enregistrement de la configuration…');
+
+      var saveUrl = '/save' + (forceMode ? '?force=1' : '');
+      fetch(saveUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(collectValues()) })
+        .then(function (r) { return r.json().then(function (data) { return { status: r.status, data: data }; }); })
+        .then(function (res) {
+          if (!res.data.ok) throw new Error(res.data.error === 'already_configured' ? 'Galahad est déjà configuré sur ce serveur.' : (res.data.message || 'Échec de l\'enregistrement.'));
+          setProgress(40, 'Construction des images et démarrage des conteneurs… (ça peut prendre quelques minutes)');
+          var ticker = 40;
+          var tick = setInterval(function () { ticker = Math.min(ticker + 2, 90); setProgress(ticker, 'Construction des images et démarrage des conteneurs… (ça peut prendre quelques minutes)'); }, 1500);
+          return fetch('/deploy', { method: 'POST' }).then(function (r) { return r.json().then(function (data) { clearInterval(tick); return data; }); });
+        })
+        .then(function (deployRes) {
+          if (!deployRes.ok) {
+            setProgress(100, 'Échec.');
+            document.getElementById('result-err-msg').textContent = 'docker compose a renvoyé une erreur (code ' + deployRes.code + ').';
+            document.getElementById('result-err-logs').textContent = deployRes.logs || '';
+            resultErr.style.display = 'block';
+            deployBtn.disabled = false;
+            return;
+          }
+          setProgress(100, 'Terminé.');
+          document.getElementById('result-ok-msg').textContent = 'Chef, Guardian et Traveler tournent. Message tes bots Telegram avec /help.';
+          resultOk.style.display = 'block';
+        })
+        .catch(function (err) {
+          setProgress(100, 'Échec.');
+          document.getElementById('result-err-msg').textContent = err.message || String(err);
+          document.getElementById('result-err-logs').textContent = '';
+          resultErr.style.display = 'block';
+          deployBtn.disabled = false;
+        });
+    }
+
+    deployBtn.addEventListener('click', runSetup);
+    document.getElementById('retry-btn').addEventListener('click', runSetup);
+
+    document.getElementById('wizard').style.display = 'block';
+  }
+
+  function boot() {
+    fetch('/status').then(function (r) { return r.json(); }).then(function (status) {
+      if (status.configured && !forceMode) {
+        document.getElementById('already').style.display = 'block';
+        document.getElementById('reconfigure-anyway').addEventListener('click', function () {
+          location.href = location.pathname + '?force=1';
+        });
+        return;
+      }
+      return fetch('/schema').then(function (r) { return r.json(); }).then(renderWizard);
+    }).catch(function (err) {
+      document.body.insertAdjacentHTML('afterbegin', '<p style="color:#F87171;padding:20px">Erreur au chargement de l\'assistant : ' + (err.message || err) + '</p>');
+    });
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

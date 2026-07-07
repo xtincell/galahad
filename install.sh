@@ -26,6 +26,27 @@ if [ -f .env ]; then
 else
   cp .env.example .env
   if [ -t 0 ]; then
+    setup_mode=2
+    if command -v node >/dev/null 2>&1; then
+      say "How do you want to configure Galahad?"
+      echo "  1) Web interface (mouse, recommended)"
+      echo "  2) Terminal (CLI prompts)"
+      read -r -p "  Choice [1]: " setup_mode
+      setup_mode="${setup_mode:-1}"
+    else
+      note "Node.js not found — falling back to the terminal wizard."
+    fi
+
+    if [ "$setup_mode" = "1" ]; then
+      IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+      [ -z "$IP" ] && IP="$(curl -s --max-time 2 ifconfig.me 2>/dev/null || true)"
+      [ -z "$IP" ] && IP="localhost"
+      say "Launching the web setup wizard"
+      note "Open http://${IP}:${SETUP_PORT:-8080} in your browser"
+      note "(Ctrl+C here stops the wizard; re-run ./install.sh to fall back to the CLI)"
+      exec node setup/server.mjs
+    fi
+
     say "Let's configure Galahad (values are written to .env)"
     prompt() { local var="$1" msg="$2" def="${3:-}" val
       read -r -p "  ${msg}${def:+ [$def]}: " val; val="${val:-$def}"
