@@ -4,15 +4,44 @@
 // provider fails (429 rate-limit, 5xx, network), the request is replayed on a
 // second provider (FALLBACK_*). An exhausted quota never puts the agent on the
 // floor. Enable by setting FALLBACK_API_KEY.
+import fs from 'node:fs'
+import path from 'node:path'
 import { config } from './config.js'
 import { log } from './journal.js'
 
+// The model id lives in data/cerveau.txt so it survives restarts and can be
+// swapped from OUTSIDE the process (cockpit / dan-brain) as well as via /brain.
+// Hot-reloaded on mtime change; env GALAHAD_MODEL is only the first-boot default.
+const cerveauFile = path.join(config.dataDir, 'cerveau.txt')
+let cerveauMtime = 0
 let currentModel = config.model
 let tokensToday = 0
 let tokenDay = new Date().toISOString().slice(0, 10)
 
-export function getModel() { return currentModel }
-export function setModel(m) { currentModel = m }
+function readCerveau() {
+  try { return fs.readFileSync(cerveauFile, 'utf8').trim() || null } catch { return null }
+}
+
+export function getModel() {
+  try {
+    const m = fs.statSync(cerveauFile).mtimeMs
+    if (m !== cerveauMtime) {
+      cerveauMtime = m
+      const v = readCerveau()
+      if (v && v !== currentModel) { log('brain_swap', { model: v, via: 'cerveau.txt' }); currentModel = v }
+    }
+  } catch { /* no cerveau.txt yet → keep current */ }
+  return currentModel
+}
+
+export function setModel(m) {
+  currentModel = m
+  try {
+    fs.mkdirSync(path.dirname(cerveauFile), { recursive: true })
+    fs.writeFileSync(cerveauFile, m)
+    cerveauMtime = fs.statSync(cerveauFile).mtimeMs
+  } catch (err) { log('brain_persist_fail', { error: String(err).slice(0, 120) }) }
+}
 export function tokensUsed() {
   const day = new Date().toISOString().slice(0, 10)
   if (day !== tokenDay) { tokenDay = day; tokensToday = 0 }
@@ -51,11 +80,13 @@ export async function chat(messages, tools) {
 
   let data
   try {
-    data = await callProvider(config.brainBaseUrl, config.brainKey, currentModel, body)
+    data = await callProvider(config.brainBaseUrl, config.brainKey, getModel(), body)
   } catch (err) {
     if (!FALLBACK.key) throw err // no fallback configured → surface the error
-    log('brain_fallback', { from: currentModel, to: FALLBACK.model, reason: String(err?.message || err).slice(0, 120) })
-    data = await callProvider(FALLBACK.baseUrl, FALLBACK.key, FALLBACK.model, body)
+    log('brain_fallback', { from: getModel(), to: FALLBACK.model, reason: String(err?.message || err).slice(0, 120) })
+    // Cap max_tokens on the fallback: OpenRouter reserves the model's full output
+    // window by default (65k) and 402s when the credit balance can't cover it.
+    data = await callProvider(FALLBACK.baseUrl, FALLBACK.key, FALLBACK.model, { ...body, max_tokens: 8192 })
   }
   tokensToday += data?.usage?.total_tokens || 0
   return data.choices?.[0]?.message || { content: '' }
