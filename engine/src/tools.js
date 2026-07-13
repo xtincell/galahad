@@ -140,8 +140,11 @@ async function callBridge(prompt, repo) {
   if (!config.bridgeUrl || !config.bridgeToken) {
     return '[claude bridge not configured on this deployment]'
   }
-  const g = guard('paid') // Claude calls cost money → gated like any paid action.
-  if (!g.allowed) return g.reason
+  // The Claude bridge is an internal dev tool the agents are meant to reach freely
+  // (operator decision 06/07/2026, applied consistently across agents). It is NOT gated:
+  // the shell guard still blocks destructive system commands, but delegating hard reasoning
+  // to Claude is the whole point of the bridge — friction here defeats it, and an anomaly
+  // at 2pm shouldn't wait for a human to type "oui" before an agent can think harder.
   log('bridge_call', { repo: repo || null, prompt: String(prompt).slice(0, 120) })
   try {
     const res = await fetch(`${config.bridgeUrl}/convoque`, {

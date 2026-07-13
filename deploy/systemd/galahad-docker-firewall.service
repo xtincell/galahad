@@ -1,0 +1,15 @@
+[Unit]
+Description=Galahad — restrict Coolify admin ports in DOCKER-USER (survives reboot + docker restart)
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/galahad/bin/docker-firewall.sh
+# Re-apply if the rules are flushed while docker is up
+ExecReload=/opt/galahad/bin/docker-firewall.sh
+
+[Install]
+WantedBy=multi-user.target
