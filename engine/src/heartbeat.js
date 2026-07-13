@@ -116,17 +116,48 @@ async function checkJournals() {
   return { status: 'ok', label: 'journals', detail }
 }
 
-// 5 — Errors: scan the last 24h of journals for error events.
+// 5 — Errors: count genuine NEW error EVENTS in the recent journals.
+//
+// Two bugs fixed here (they made this check a token pump — cf. Galahad P0.4):
+//  (a) It used `grep -ihc error`, which counts the substring "error" ANYWHERE —
+//      including benign event names (poll_error = a transient Telegram poll timeout;
+//      brain_fallback whose reason text mentions "error") and any payload that merely
+//      quotes an error string. We now classify on the JSON `event` field only, with a
+//      denylist of known-transient events. guard_block / brain_fallback are NOT errors.
+//  (b) It was level-triggered over a 24h window: one error kept the check in `warn`
+//      for 24h, so the brain was re-woken EVERY tick (every 60s) for a full day — and
+//      each failed wake logged heartbeat_brain_error, which the old grep then re-counted,
+//      a self-feeding loop. We now edge-trigger via a watermark: an error is counted
+//      once, the watermark advances, and a quiet tick spends zero tokens.
+const errWatermarkFile = path.join(config.dataDir, 'errors-seen.txt')
+const ERROR_EVENT = /(_error|_fail)$|^error$/
+const ERROR_EVENT_IGNORE = new Set(['poll_error']) // transient Telegram long-poll timeouts
 async function checkErrors() {
   const dir = config.journalDir
   const days = [0, 1].map((d) => new Date(Date.now() - d * 864e5).toISOString().slice(0, 10))
   const paths = days.map((d) => path.join(dir, `${d}.jsonl`)).filter(fs.existsSync)
   if (!paths.length) return { status: 'skip', label: 'errors', detail: 'no recent journals' }
-  const r = await run(`grep -ihc error ${paths.map((p) => `'${p}'`).join(' ')} 2>/dev/null | awk '{s+=$1} END{print s+0}'`)
-  if (!r.ok) return { status: 'fail', label: 'errors', detail: `grep failed: ${r.err}` }
-  const n = Number(r.out) || 0
-  if (n > 0) return { status: 'warn', label: 'errors', detail: `${n} error line(s) in last 24h journals` }
-  return { status: 'ok', label: 'errors', detail: 'clean (24h)' }
+  let since = ''
+  try { since = fs.readFileSync(errWatermarkFile, 'utf8').trim() } catch { /* first run */ }
+  let count = 0
+  let newest = since
+  for (const p of paths) {
+    let lines
+    try { lines = fs.readFileSync(p, 'utf8').split('\n') } catch { continue }
+    for (const ln of lines) {
+      if (!ln) continue
+      let o
+      try { o = JSON.parse(ln) } catch { continue }
+      const ev = o.event || ''
+      if (!ERROR_EVENT.test(ev) || ERROR_EVENT_IGNORE.has(ev)) continue
+      if (o.t && o.t > since) { count++; if (o.t > newest) newest = o.t }
+    }
+  }
+  try {
+    if (newest && newest !== since) { fs.mkdirSync(config.dataDir, { recursive: true }); fs.writeFileSync(errWatermarkFile, newest) }
+  } catch { /* watermark best-effort; never throws an error event that would re-trigger us */ }
+  if (count > 0) return { status: 'warn', label: 'errors', detail: `${count} new error event(s) since last patrol` }
+  return { status: 'ok', label: 'errors', detail: since ? 'no new errors' : 'clean' }
 }
 
 // The full sweep, in fixed order.
@@ -200,30 +231,40 @@ function reportFinding(text) {
   return send(text)
 }
 
+const anomalySigFile = path.join(config.dataDir, 'anomaly-sig.txt')
+
 export async function heartbeat() {
   const report = await patrol()
   log('patrol', { warns: report.warns.length, fails: report.fails.length })
   writeEtatDuMonde(report)
 
-  // Explicit failure handling: a check that could not run is surfaced, never
-  // silently swallowed. This is the radar rule — if an instrument is blind, say so.
-  if (report.fails.length) {
-    const body = report.fails.map((f) => `🔴 ${f.label}: ${f.detail}`).join('\n')
-    await reportFinding(`🛡️ ${config.agentName} — patrol check(s) could not run:\n${body}`).catch((e) => log('alert_send_error', { error: String(e) }))
-  }
-
-  // Anomaly handling: zero-token Telegram alert with the offending details.
-  if (report.warns.length) {
-    const body = report.warns.map((w) => `🟠 ${w.label}: ${w.detail}`).join('\n')
-    await reportFinding(`🛡️ ${config.agentName} — anomaly on patrol:\n${body}`).catch((e) => log('alert_send_error', { error: String(e) }))
-  }
-
-  // All clear → silent. The journal + ETAT_DU_MONDE.md hold the record; no Telegram spam.
-
-  // Escalation — wake the brain ONLY on a real anomaly (guardian) or in the night
-  // window (traveler). Everything above is zero-token; tokens are spent only here.
+  // Edge-triggering — the load-bearing fix for the token leak (Galahad P0.4). A STANDING
+  // condition (disk stuck at 80%, a container down for hours) must not re-alert and
+  // re-wake the brain every single tick. We reduce the current anomalies to a signature
+  // (labels + status) and only act when it CHANGES vs the previous tick. ETAT_DU_MONDE.md
+  // always holds the full live detail, so nothing is hidden — we just stop repeating it.
   const anomaly = report.warns.length > 0 || report.fails.length > 0
-  const wake = config.brainOnEvent && (anomaly || (config.role === 'traveler' && isNight()))
+  const sig = [...report.fails, ...report.warns].map((s) => `${s.label}:${s.status}`).sort().join('|')
+  let prevSig = ''
+  try { prevSig = fs.readFileSync(anomalySigFile, 'utf8').trim() } catch { /* first run */ }
+  const anomalyIsNew = anomaly && sig !== prevSig
+  try { fs.mkdirSync(config.dataDir, { recursive: true }); fs.writeFileSync(anomalySigFile, sig) } catch { /* best-effort */ }
+
+  // Surface fails/warns on Telegram — but only when the picture changed, never as a
+  // per-minute repeat. A check that could not run (fail) is still surfaced the tick it
+  // appears; the radar rule (a blind instrument must speak) holds, without the spam.
+  if (anomalyIsNew) {
+    const fb = report.fails.map((f) => `🔴 ${f.label}: ${f.detail}`)
+    const wb = report.warns.map((w) => `🟠 ${w.label}: ${w.detail}`)
+    await reportFinding(`🛡️ ${config.agentName} — patrol change:\n${[...fb, ...wb].join('\n')}`).catch((e) => log('alert_send_error', { error: String(e) }))
+  }
+
+  // All clear (or unchanged) → silent. The journal + ETAT_DU_MONDE.md hold the record.
+
+  // Escalation — wake the brain ONLY on a NEW anomaly (guardian) or in the night window
+  // (traveler). A persistent, already-seen anomaly spends zero tokens; tokens go only to
+  // genuinely new events or the traveler's intended night exploration.
+  const wake = config.brainOnEvent && (anomalyIsNew || (config.role === 'traveler' && isNight()))
   if (!wake) return
 
   const reason = anomaly
