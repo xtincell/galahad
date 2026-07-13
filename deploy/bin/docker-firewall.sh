@@ -1,39 +1,49 @@
 #!/bin/bash
-# docker-firewall.sh — close the Coolify admin surface that Docker published to the world.
+# docker-firewall.sh — close only the Docker-published ports that are dangerous AND never
+# needed from outside, WITHOUT ever locking the operator out of Coolify.
 #
-# WHY THIS EXISTS: there is no Hostinger cloud firewall, and Docker's DNAT bypasses ufw
-# (the DOCKER-USER chain is where forwarded-to-container traffic is actually filtered).
-# Coolify published its dashboard (8000), realtime (6001/6002), Traefik API (8080) and one
-# app's raw port (8964) on 0.0.0.0 — reachable by anyone. This restricts them to Alexandre's
-# ISP block + internal Docker networks and drops the rest. 80/443 stay fully public (that's
-# where the apps live, via Traefik) and SSH/22 is a host-INPUT port, untouched.
+# WHY: there is no Hostinger cloud firewall and Docker's DNAT bypasses ufw (DOCKER-USER is
+# where forwarded-to-container traffic is actually filtered). But the operator administers
+# from many networks (Starlink / Camtel / Orange / VPN) with dynamic IPs, so an IP allowlist
+# is the WRONG tool — it would lock him out on a new network. So:
+#   • 8000 (Coolify dashboard) + 6001/6002 (realtime the dashboard needs) stay OPEN — reachable
+#     from any network, gated by Coolify's own login. (Coolify has no HTTPS domain yet; the raw
+#     port is the only way in. The durable upgrade is a coolify.<domain> FQDN + 2FA, then this
+#     script can close 8000 too — see INTERNAL_ONLY below to extend it.)
+#   • 8080 (Traefik API/dashboard — typically UNAUTHENTICATED, the real risk) and 8964 (an app
+#     already served over 443 via its domain, so the raw port is redundant) → INTERNAL ONLY:
+#     reachable from Docker networks, dropped from the internet. Neither is needed externally;
+#     if ever, reach them over an SSH tunnel.
+#   80/443 (all apps, via Traefik) and SSH/22 are untouched.
 #
 # ROBUSTNESS: matches the ORIGINAL destination port via conntrack (--ctorigdstport), NOT
 # --dport. In DOCKER-USER the packet is already DNAT'd to the container IP:port, and those
 # container IPs shuffle on every redeploy — matching the original published port is stable.
-# Idempotent: deletes its own prior rules before re-adding, so it is safe to re-run and to
-# re-apply after every Docker daemon restart (which flushes DOCKER-USER).
+# Idempotent: deletes its own prior rules (incl. any legacy IP-allowlist rules) before
+# re-adding, so it is safe to re-run and to re-apply after every Docker daemon restart.
 set -uo pipefail
-ADMIN="${ADMIN_CIDR:-143.105.152.0/24}"   # Alexandre's ISP block (IPs seen: .56, .141 — dynamic)
 INTERNAL="10.0.0.0/8"
-PORTS="${ADMIN_PORTS:-8000 6001 6002 8080 8964}"
+INTERNAL_ONLY="${INTERNAL_ONLY_PORTS:-8080 8964}"   # dangerous/redundant → internal only
+OPEN_PORTS="${OPEN_PORTS:-8000 6001 6002}"          # operator-reachable from anywhere (auth-gated)
 CH=DOCKER-USER
 
 command -v iptables >/dev/null || { echo "no iptables"; exit 1; }
 
-add() { iptables -C "$CH" "$@" 2>/dev/null || iptables -I "$CH" "$@"; }
-del_all() { while iptables -D "$CH" "$@" 2>/dev/null; do :; done; }
+# Comprehensive scrub: delete EVERY DOCKER-USER rule referencing one of our ports, whatever
+# its source or target, by line number (bottom-up). Source-agnostic → re-runs never leave
+# cruft, even from earlier experiments with different admin CIDRs.
+scrub_port() {
+  local p="$1"
+  iptables -L "$CH" --line-numbers -n 2>/dev/null | awk -v pat="ctorigdstport $p\$" '$0 ~ pat {print $1}' \
+    | sort -rn | while read -r n; do iptables -D "$CH" "$n" 2>/dev/null || true; done
+}
+for p in $OPEN_PORTS $INTERNAL_ONLY; do scrub_port "$p"; done
 
-for p in $PORTS; do
+# Internal-only ports → allow Docker networks, drop the world (RETURN above DROP).
+for p in $INTERNAL_ONLY; do
   m="-p tcp -m conntrack --ctorigdstport $p"
-  # remove any prior copies (idempotency)
-  del_all $m -s "$ADMIN" -j RETURN
-  del_all $m -s "$INTERNAL" -j RETURN
-  del_all $m -j DROP
-  # re-insert: RETURNs must sit ABOVE the DROP (iptables -I prepends, so add DROP first)
   iptables -I "$CH" $m -j DROP
   iptables -I "$CH" $m -s "$INTERNAL" -j RETURN
-  iptables -I "$CH" $m -s "$ADMIN" -j RETURN
 done
-logger -t docker-firewall "applied: admin=$ADMIN ports=[$PORTS] (80/443 public, ssh untouched)"
-echo "docker-firewall applied — admin=$ADMIN, restricted ports: $PORTS"
+logger -t docker-firewall "applied: open=[$OPEN_PORTS] internal-only=[$INTERNAL_ONLY] (80/443 public, ssh untouched)"
+echo "docker-firewall applied — open (any network): $OPEN_PORTS | internal-only: $INTERNAL_ONLY"
