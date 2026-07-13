@@ -10,7 +10,7 @@
 set -uo pipefail
 TO="${1:?usage: delegate.sh <to_agent> <skill> [args_json]}"
 SKILL="${2:?skill required}"
-ARGS="${3:-{}}"
+ARGS="${3:-}"; [ -z "$ARGS" ] && ARGS='{}'   # NB: ${3:-{}} mis-parses (nested braces) → don't
 TOK=$(grep -oP 'MEMORY_API_TOKEN=\K.*' /etc/danmem/danmem.env 2>/dev/null || true)
 [ -z "$TOK" ] && { echo "delegate: cannot read danmem token"; exit 1; }
 B=http://localhost:8790; H="Authorization: Bearer $TOK"
