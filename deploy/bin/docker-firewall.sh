@@ -6,15 +6,18 @@
 # where forwarded-to-container traffic is actually filtered). But the operator administers
 # from many networks (Starlink / Camtel / Orange / VPN) with dynamic IPs, so an IP allowlist
 # is the WRONG tool — it would lock him out on a new network. So:
-#   • 8000 (Coolify dashboard) + 6001/6002 (realtime the dashboard needs) stay OPEN — reachable
-#     from any network, gated by Coolify's own login. (Coolify has no HTTPS domain yet; the raw
-#     port is the only way in. The durable upgrade is a coolify.<domain> FQDN + 2FA, then this
-#     script can close 8000 too — see INTERNAL_ONLY below to extend it.)
+#   • 8000 (Coolify dashboard) → INTERNAL ONLY. Coolify is reachable over HTTPS at its own FQDN
+#     coolify.powerupgraders.com (443 → Traefik → internal), so the operator gets to it from ANY
+#     network via that URL, and Dan reaches its API on localhost:8000 (loopback, unaffected by
+#     this chain). The raw internet-facing port is therefore closed — verified both paths still
+#     work and the external port times out.
 #   • 8080 (Traefik API/dashboard — typically UNAUTHENTICATED, the real risk) and 8964 (an app
-#     already served over 443 via its domain, so the raw port is redundant) → INTERNAL ONLY:
-#     reachable from Docker networks, dropped from the internet. Neither is needed externally;
-#     if ever, reach them over an SSH tunnel.
-#   80/443 (all apps, via Traefik) and SSH/22 are untouched.
+#     already served over 443 via its domain, so the raw port is redundant) → INTERNAL ONLY too.
+#   • 6001/6002 (Coolify realtime) stay OPEN — they are NOT proxied through the FQDN, the browser
+#     connects to them directly, so the operator's dashboard needs them reachable from any
+#     network. App-key gated; minor residual. (Set PUSHER_HOST to the FQDN in Coolify to route
+#     realtime over 443 too, then move 6001/6002 into INTERNAL_ONLY as well.)
+#   80/443 (all apps + Coolify's own FQDN, via Traefik) and SSH/22 are untouched.
 #
 # ROBUSTNESS: matches the ORIGINAL destination port via conntrack (--ctorigdstport), NOT
 # --dport. In DOCKER-USER the packet is already DNAT'd to the container IP:port, and those
@@ -23,8 +26,8 @@
 # re-adding, so it is safe to re-run and to re-apply after every Docker daemon restart.
 set -uo pipefail
 INTERNAL="10.0.0.0/8"
-INTERNAL_ONLY="${INTERNAL_ONLY_PORTS:-8080 8964}"   # dangerous/redundant → internal only
-OPEN_PORTS="${OPEN_PORTS:-8000 6001 6002}"          # operator-reachable from anywhere (auth-gated)
+INTERNAL_ONLY="${INTERNAL_ONLY_PORTS:-8000 8080 8964}"   # closed to the world (8000 via FQDN/localhost)
+OPEN_PORTS="${OPEN_PORTS:-6001 6002}"                    # realtime the browser needs from any network
 CH=DOCKER-USER
 
 command -v iptables >/dev/null || { echo "no iptables"; exit 1; }
