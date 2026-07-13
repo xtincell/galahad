@@ -2,3 +2,4 @@ CRON_TZ=Africa/Abidjan
 0 8 * * * root /opt/galahad/patrol/purge.sh
 0 18 * * * root /opt/galahad/patrol/purge.sh
 0 19 * * * root /opt/galahad/patrol/deliver.sh
+30 19 * * * root /opt/galahad/patrol/deliver-watchdog.sh
