@@ -1,0 +1,20 @@
+{
+  "name": "audit-coherence",
+  "description": "Declared-vs-real consistency audit (read-only): cron field validity, repo↔deployed source drift, brain model freeze, patrol freshness. The vaccine against the drift disease — what a component SAYS it is vs what it DOES. Agent-agnostic (relative paths + $GALAHAD_HOME).",
+  "trigger": ["manual", "cron", "delegation"],
+  "preconditions": [],
+  "steps": [
+    { "run": "awk 'NF && $1!~/^#/ && $1!~/=/ { if (NF<7) print $0 }' /etc/cron.d/galahad-patrol 2>/dev/null || true", "as": "cron_bad" },
+    { "run": "for f in $(ls src 2>/dev/null); do diff -q /opt/claude-bridge/workspace/galahad/engine/src/$f src/$f >/dev/null 2>&1 || echo \"$f\"; done", "as": "drift" },
+    { "run": "cat \"$GALAHAD_HOME/data/cerveau.txt\" 2>/dev/null || echo '(none)'", "as": "brain_real" },
+    { "run": "grep -rilE 'kimi-k2|cerveau (deepseek|glm|gpt)-' \"$GALAHAD_HOME/memory\" SOUL.md 2>/dev/null | head || true", "as": "brain_frozen" },
+    { "run": "find \"$GALAHAD_HOME/memory/ETAT_DU_MONDE.md\" -mmin -180 2>/dev/null | grep -q . && echo fresh || echo STALE_or_missing", "as": "world_fresh" },
+    {
+      "decide": "You are Talos running a declared-vs-real consistency audit. Report only genuine drift; a component that SAYS one thing while DOING another is the disease.\n\nSignals (each should be as noted):\n- Cron lines in galahad-patrol missing the user field — should be EMPTY:\n{{cron_bad}}\n- Source files where the deployed copy differs from the repo (repo↔deployed drift) — should be EMPTY:\n{{drift}}\n- Brain model actually configured (data/cerveau.txt): {{brain_real}}\n- Files that FREEZE a model name in SOUL/memory — should be EMPTY (freezing is the self-report trap): {{brain_frozen}}\n- ETAT_DU_MONDE.md fresh (<3h): {{world_fresh}}\n\nIf every signal is clean, answer exactly 'COHÉRENT — aucune dérive'. Otherwise list each real drift on one line with the precise fix.",
+      "as": "verdict"
+    }
+  ],
+  "verify": [],
+  "rollback": [],
+  "on_failure": "report"
+}

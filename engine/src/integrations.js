@@ -75,6 +75,18 @@ export async function danmemObserve(peer, content, opts = {}) {
     source: opts.source || config.agentName,
   })
 }
+// Delegation bus client (Galahad Phase 3). The director side pulls its pending jobs,
+// claims atomically (409 → someone else won), and writes back the result.
+export const danmemJobs = {
+  pending: async (to) => { const d = await danmemCall('GET', `/jobs?to=${encodeURIComponent(to)}&status=pending`); return d.jobs || [] },
+  claim: async (id) => {
+    try { const d = await danmemCall('PATCH', `/jobs/${id}`, { claim: true }); return d.claimed || null }
+    catch (e) { if (String(e).includes('409')) return null; throw e }
+  },
+  complete: (id, status, result) => danmemCall('PATCH', `/jobs/${id}`, { status, result }),
+  post: async (to, skill, args, from) => { const d = await danmemCall('POST', '/jobs', { to, skill, args: args || {}, from: from || config.agentName }); return d.id },
+  get: (id) => danmemCall('GET', `/jobs/${id}`),
+}
 export const isDanmemTool = (n) => n.startsWith('memoire_')
 export async function danmemRun(name, a) {
   switch (name) {

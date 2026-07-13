@@ -4,3 +4,4 @@ CRON_TZ=Africa/Abidjan
 0 19 * * * root /opt/galahad/patrol/deliver.sh
 30 19 * * * root /opt/galahad/patrol/deliver-watchdog.sh
 30 4 * * * root /opt/galahad/patrol/prune-coolify-images.sh
+0 5 * * 0 root /opt/galahad/bin/delegate.sh Talos audit-coherence >/dev/null 2>&1

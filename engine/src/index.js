@@ -11,6 +11,7 @@ import { getModel, setModel, tokensUsed } from './brain.js'
 import { ensureMemory, readIndex } from './memory.js'
 import { heartbeat, statusText, getPatrolMinutes, setPatrolMinutes } from './heartbeat.js'
 import { pendingGoals, addGoal, formatGoals } from './goals.js'
+import { startJobLoop } from './jobs.js'
 import { execFile } from 'node:child_process'
 
 for (const dir of [config.home, config.memoryDir, config.journalDir, config.dataDir, config.workspace]) {
@@ -99,6 +100,9 @@ if (config.heartbeatMinutes > 0) {
   schedulePatrol()
   heartbeat().catch((e) => log('heartbeat_error', { error: String(e) }))
 }
+
+// Delegation consumer — pull & run jobs addressed to this agent (no inbound port).
+startJobLoop()
 
 process.on('SIGTERM', () => { log('shutdown'); process.exit(0) })
 process.on('SIGINT', () => { log('shutdown'); process.exit(0) })
