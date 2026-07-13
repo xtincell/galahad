@@ -1,0 +1,22 @@
+{
+  "name": "diagnostic-coolify",
+  "description": "Read-only health diagnostic of the Coolify stack and the apps it runs: core services, unhealthy/restarting/exited containers, disk headroom. Produces one concise verdict. No mutation.",
+  "trigger": ["manual", "delegation", "cron"],
+  "preconditions": [
+    { "check": "docker info >/dev/null 2>&1", "desc": "docker daemon reachable" }
+  ],
+  "steps": [
+    { "run": "docker ps --format '{{.Names}} :: {{.Status}}' | grep -iE 'coolify' | head -20 || true", "as": "coolify_core" },
+    { "run": "docker ps -a --format '{{.Names}} :: {{.Status}}' | grep -iE 'unhealthy|restarting|[(]dead[)]|Exited [(][1-9]' | head -30 || true", "as": "problems" },
+    { "run": "df -hP / | awk 'NR==2{print $5\" used, \"$4\" free\"}'", "as": "disk" },
+    {
+      "decide": "You are Talos, diagnosing the Coolify stack from real data.\n\nCoolify core services:\n{{coolify_core}}\n\nProblem containers (unhealthy / restarting / dead / crash-exited):\n{{problems}}\n\nRoot disk: {{disk}}\n\nRule: if the three Coolify core services (coolify, coolify-proxy, coolify-realtime) are Up and the problem list is empty, answer exactly 'RAS' followed by the disk figure. Otherwise name precisely what is wrong and the single most useful next action. One short paragraph, no preamble.",
+      "as": "verdict"
+    }
+  ],
+  "verify": [
+    { "check": "docker info >/dev/null 2>&1", "desc": "docker still reachable after the diagnostic" }
+  ],
+  "rollback": [],
+  "on_failure": "report"
+}

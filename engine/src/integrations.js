@@ -63,6 +63,18 @@ export const danmemSchemas = config.danmemUrl ? [
   fn('memoire_carte', 'Read a peer synthetic card (no LLM).', { peer: { type: 'string' } }, []),
   fn('memoire_peers', 'List danmem peers with observation counts.', {}, []),
 ] : []
+// Programmatic write for the skill-runner (and anything else) to record shared state.
+// No-op if danmem isn't configured; never throws on a missing config, only on a live HTTP error.
+export async function danmemObserve(peer, content, opts = {}) {
+  if (!config.danmemUrl) return null
+  return danmemCall('POST', '/observe', {
+    peer: peer || config.agentName,
+    content: content || '',
+    strate: opts.strate || 'S2',
+    kind: opts.kind || 'note',
+    source: opts.source || config.agentName,
+  })
+}
 export const isDanmemTool = (n) => n.startsWith('memoire_')
 export async function danmemRun(name, a) {
   switch (name) {

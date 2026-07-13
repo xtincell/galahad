@@ -9,10 +9,34 @@ import { guard } from './hooks.js'
 import { writeCard, readCard } from './memory.js'
 import { log } from './journal.js'
 import { radarSchemas, isRadarTool, radarRun, danmemSchemas, isDanmemTool, danmemRun } from './integrations.js'
+import { runSkill, listSkills } from './skill-runner.js'
 
 const sh = promisify(exec)
 
 export const toolSchemas = [
+  {
+    type: 'function',
+    function: {
+      name: 'run_skill',
+      description: 'Run a Galahad skill: a verified procedure (preconditions → steps → verify → rollback) that produces a reliable result. Prefer this over ad-hoc shell for anything a skill covers. Returns a structured report with a finding.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'skill name (see list_skills)' },
+          args: { type: 'object', description: 'optional arguments substituted as {{key}} inside the skill' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_skills',
+      description: 'List the skills available to this agent.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
   {
     type: 'function',
     function: {
@@ -100,6 +124,12 @@ export async function runTool(name, args) {
       return readCard(args.name) || `[no card named ${args.name}]`
     case 'call_claude':
       return callBridge(args.prompt, args.repo)
+    case 'run_skill': {
+      const report = await runSkill(args.name, args.args || {}, { by: 'brain' })
+      return JSON.stringify(report)
+    }
+    case 'list_skills':
+      return listSkills().join('\n') || '(no skills installed)'
     default:
       return `[error] unknown tool ${name}`
   }
