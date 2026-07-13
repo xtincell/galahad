@@ -59,6 +59,9 @@ export const config = {
   nightStartHour: Number(process.env.GALAHAD_NIGHT_START || 22),
   nightEndHour: Number(process.env.GALAHAD_NIGHT_END || 6),
   timezone: process.env.GALAHAD_TZ || 'UTC',
+  // Opt-in per role: during the night window, let pre-approved objectives clear the
+  // guard unattended (the traveler works while the operator sleeps). Off by default.
+  nightAutoGrant: (process.env.GALAHAD_NIGHT_AUTOGRANT ?? 'false') === 'true',
   brainOnEvent: (process.env.GALAHAD_BRAIN_ON_EVENT ?? 'true') === 'true',
 
   // Guardian patrol thresholds — shell-level, zero-token anomaly gates.

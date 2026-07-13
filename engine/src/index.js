@@ -6,7 +6,7 @@ import { config } from './config.js'
 import { log } from './journal.js'
 import { pollLoop, send, typing } from './telegram.js'
 import { think, resetSession } from './agent-loop.js'
-import { grantFromUser } from './hooks.js'
+import { grantFromUser, grantScoped } from './hooks.js'
 import { getModel, setModel, tokensUsed } from './brain.js'
 import { ensureMemory, readIndex } from './memory.js'
 import { heartbeat, statusText, getPatrolMinutes, setPatrolMinutes } from './heartbeat.js'
@@ -23,6 +23,7 @@ const HELP = `🔷 ${config.agentName} — ${config.roleDef.title} (Galahad)
 /brain — show brain · /brain <model> — swap it (hot)
 /patrol — show cadence · /patrol <min> — set it (hot)
 /goal — show goals · /goal <objective> — add one (guides night work)
+/grant — pre-authorise engaging actions for a bounded window (/grant <minutes>)
 /purge — run patrol purge now (findings → Claude → deliver)
 /memory — memory index
 /new — fresh conversation
@@ -55,6 +56,13 @@ async function onMessage(text) {
     if (!arg) return send(`🎯 Goals:\n${formatGoals(pendingGoals())}\nAdd: /goal <objective>`)
     const n = addGoal(arg); log('goal_add', {})
     return send(`🎯 Goal added (${n} total). It guides the night-exploration window.`)
+  }
+
+  if (text === '/grant' || text.startsWith('/grant ')) {
+    const arg = text.slice(6).trim()
+    if (!arg) return send('🔓 Pre-authorise engaging (destructive/paid) actions for a bounded window.\nUse: /grant <minutes> (1–1440) — e.g. /grant 480 before a night run.')
+    const m = grantScoped(arg)
+    return send(`🔓 Engaging actions pre-authorised for *${m} min*. Dangerous/paid ops will pass and be journalled (via=scoped).`)
   }
 
   if (text === '/purge') {
