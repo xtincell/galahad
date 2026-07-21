@@ -1,0 +1,3 @@
+# FABLE — patrouille autonome toutes les 6 h (galahad deploy/fable). Silence si rien.
+MAILTO=""
+0 */6 * * * root /opt/fable/bin/fable-cron.sh >> /var/log/fable-patrol.log 2>&1
