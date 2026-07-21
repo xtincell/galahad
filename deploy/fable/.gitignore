@@ -1,0 +1,6 @@
+# secrets & runtime — jamais dans git
+.fable-token
+escalation.env
+consent.json
+journal.jsonl
+last-patrol.txt

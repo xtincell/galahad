@@ -89,6 +89,14 @@
 ### 3.7 Isolation des agents homebrew
 - Hook `preToolUse` : `isInsideHome()` limite write/edit au home ; `OTHERS_PERIMETER` (regex) bloque toute action mutante sur le domaine d'un autre agent ; bash bloque `curl|wget|scp|rsync|ssh|mail|nc|ftp`. Pour ouvrir un agent à un **workspace partagé**, ajouter le chemin à `isInsideHome` + pointer `<AGENT>_WORKSPACE` dessus + ACL POSIX (`setfacl -R -m u:<agent>:rwx` + default). `git` n'est PAS dans la blocklist → push https OK.
 
+### 3.8 Agent Claude autonome par cron (Fable) — les 4 pièges du headless
+- **Contexte** : FABLE = agent de pilotage infra en `claude -p` headless réveillé par cron (deploy/fable/). Pattern réutilisable pour tout agent Claude autonome.
+- **Piège 1 — `bypassPermissions` désarme TOUT** : en headless on lance `--permission-mode bypassPermissions` (sinon blocage interactif). Conséquence : **le hook PreToolUse est l’UNIQUE garde-fou**. Porter la logique guard du moteur homebrew (regex destructif/payant + consentement fenêtré file-backed + journal) en hook Claude Code (`.claude/hooks/guard.py`, exit 2 = bloqué). Vérifié live : le modèle est bloqué et n’insiste pas.
+- **Piège 2 — forme argv** : les commandes destructives passent aussi en JSON argv via le sas (`{"argv":["docker","rm",...]}`) — normaliser (virer quotes/virgules) avant de matcher les regex, sinon le hook rate la moitié des cas.
+- **Piège 3 — cron en user, pas root** : un run root laisse `journal.jsonl` root-owned → les runs claudebridge suivants échouent en `PermissionError` silencieuse. Le wrapper cron fait `sudo -u claudebridge`, et tout fichier partagé doit être owner claudebridge.
+- **Piège 4 — auth headless** : réutiliser l’auth existante d’un user service (claudebridge) au lieu d’un OAuth dédié ; elle peut tomber après un auto-update (§3.3) → le wrapper cron resynchronise root→user avant chaque patrouille. Et toujours `claude -p ... < /dev/null` (§3.2).
+- **Silence si rien** : le prompt de patrouille impose une dernière ligne exactement `RAS` — c’est le signal machine-lisible du wrapper (statut RAS/ACTION/ERROR journalisé ; ERROR s’auto-escalade).
+
 ---
 
 ## 4. Divers
