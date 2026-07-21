@@ -1,0 +1,28 @@
+# Sas Admin danhermes — passerelle unique authentifiée sur :443
+# Traefik (déjà présent via Coolify) route admin.<host> -> sas-gateway.
+# Adapter le nom du réseau Traefik (souvent "coolify") et le domaine.
+
+services:
+  sas-gateway:
+    build: ./gateway
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - sas-data:/data                       # revoked.json + audit.jsonl (persistant)
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # /exec -> docker (lecture)
+    networks:
+      - coolify        # <-- réseau Traefik/Coolify ; les backends (danmem, webdav...) doivent y être joignables
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sas.rule=Host(`admin.danhermes.76-13-128-23.sslip.io`)"
+      - "traefik.http.routers.sas.entrypoints=https"
+      - "traefik.http.routers.sas.tls=true"
+      - "traefik.http.routers.sas.tls.certresolver=letsencrypt"
+      - "traefik.http.services.sas.loadbalancer.server.port=8080"
+
+volumes:
+  sas-data:
+
+networks:
+  coolify:
+    external: true
